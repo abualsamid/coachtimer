@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildCsv,
   canFinish,
+  coerceLapCount,
   computeAverageLap,
+  buildSupDistances,
   computeLapSplits,
   computeTotalTime,
   formatDuration,
@@ -51,6 +53,17 @@ describe("timing helpers", () => {
 
   it("replaces athlete names in lists", () => {
     expect(replaceName(["Ada", "Grace"], "Ada", "Ada Lovelace")).toEqual(["Ada Lovelace", "Grace"]);
+  });
+
+  it("builds SUP distances up to a max lap count", () => {
+    const distances = buildSupDistances(3);
+    expect(distances).toHaveLength(3);
+    expect(distances[2].label).toBe("3 laps");
+  });
+
+  it("coerces lap counts to step and bounds", () => {
+    expect(coerceLapCount(12.3, 0.5, 200, 0.5)).toBe(12.5);
+    expect(coerceLapCount(0.1, 0.5, 200, 0.5)).toBe(0.5);
   });
 });
 

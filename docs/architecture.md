@@ -14,6 +14,7 @@ This repository is an offline-first, client-only JavaScript app served from a st
 
 ## Screens
 - Setup: sport/event/distance/start mode, athlete selection.
+- Settings: default start modes and SUP lap choices.
 - Start Control: mass or staggered starts.
 - Live Timing: single-athlete view with swipe navigation.
 - Results Summary: per-athlete splits and notes, save/export.
