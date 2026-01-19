@@ -12,7 +12,10 @@
         <p class="eyebrow">Special Olympics</p>
         <h1>Multi-Sport Timing</h1>
       </div>
-      <button class="ghost" id="history-nav" type="button">History</button>
+      <div class="header-actions">
+        <button class="ghost" id="settings-nav" type="button">Settings</button>
+        <button class="ghost" id="history-nav" type="button">History</button>
+      </div>
     </header>
     <main>
       <section id="screen-setup" class="screen active" aria-labelledby="setup-title">
@@ -29,6 +32,10 @@
           <label class="field">
             <span>Distance</span>
             <select id="distance-select"></select>
+          </label>
+          <label class="field lap-input">
+            <span>Total laps (editable)</span>
+            <input id="total-laps-input" type="number" step="0.5" min="0.5" />
           </label>
           <label class="field">
             <span>Start Mode</span>
@@ -87,6 +94,30 @@
           <button id="export-results" class="ghost" type="button">Export CSV</button>
           <button id="new-race" class="ghost" type="button">Start New Race</button>
         </div>
+      </section>
+
+      <section id="screen-settings" class="screen" aria-labelledby="settings-title">
+        <h2 id="settings-title">Settings</h2>
+        <div class="card">
+          <h3>Default Start Mode</h3>
+          <label class="field">
+            <span>Cycling</span>
+            <select id="settings-cycling-start"></select>
+          </label>
+          <label class="field">
+            <span>SUP</span>
+            <select id="settings-sup-start"></select>
+          </label>
+        </div>
+        <div class="card">
+          <h3>SUP Lap Options</h3>
+          <label class="field">
+            <span>Max laps (1-12)</span>
+            <input id="settings-sup-max" type="number" min="1" max="12" step="1" />
+          </label>
+          <p class="muted">Controls the number of lap choices shown for SUP races.</p>
+        </div>
+        <button id="back-to-setup-3" class="primary" type="button">Back to Setup</button>
       </section>
 
       <section id="screen-history" class="screen" aria-labelledby="history-title">

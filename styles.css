@@ -39,6 +39,11 @@ body.mode-live {
   z-index: 5;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .app-header h1 {
   margin: 4px 0 0;
   font-size: 1.5rem;
@@ -211,6 +216,11 @@ textarea:focus-visible {
 .athlete-actions {
   display: flex;
   gap: 8px;
+}
+
+.lap-input {
+  display: grid;
+  gap: 6px;
 }
 
 .live-header {

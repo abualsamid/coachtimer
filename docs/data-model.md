@@ -32,4 +32,10 @@ Saved per athlete per race and includes lap-level data:
 ## Storage Keys
 - `coachtimer:athletes`
 - `coachtimer:setup`
+- `coachtimer:settings`
 - `coachtimer:history`
+
+## Settings
+- `cyclingDefaultStart` (string): default start mode for cycling.
+- `supDefaultStart` (string): default start mode for SUP.
+- `supMaxLaps` (number): max selectable laps for SUP (1-12).

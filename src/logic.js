@@ -186,6 +186,36 @@ export function requiredLapCount(totalLaps) {
 }
 
 /**
+ * @param {number} maxLaps
+ * @returns {{ id: string, label: string, totalLaps: number }[]}
+ */
+export function buildSupDistances(maxLaps) {
+  const safeMax = Math.min(12, Math.max(1, Math.floor(maxLaps)));
+  return Array.from({ length: safeMax }, (_, index) => {
+    const total = index + 1;
+    return {
+      id: `sup-${total}lap`,
+      label: `${total} lap${total === 1 ? "" : "s"}`,
+      totalLaps: total
+    };
+  });
+}
+
+/**
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ * @param {number} step
+ * @returns {number}
+ */
+export function coerceLapCount(value, min, max, step) {
+  if (!Number.isFinite(value)) return min;
+  const clamped = Math.min(max, Math.max(min, value));
+  const rounded = Math.round(clamped / step) * step;
+  return Math.min(max, Math.max(min, Number(rounded.toFixed(3))));
+}
+
+/**
  * @param {string[]} list
  * @param {string} from
  * @param {string} to

@@ -2,6 +2,8 @@
 import {
   buildCsv,
   canFinish,
+  buildSupDistances,
+  coerceLapCount,
   computeLapSplits,
   computeTotalTime,
   formatDuration,
@@ -27,6 +29,7 @@ import {
  * @property {string} distanceId
  * @property {string} startMode
  * @property {string[]} selectedAthletes
+ * @property {number} totalLaps
  */
 
 /**
@@ -76,26 +79,19 @@ function getRequiredElement(selector) {
 const STORAGE_KEYS = {
   athletes: "coachtimer:athletes",
   setup: "coachtimer:setup",
+  settings: "coachtimer:settings",
   history: "coachtimer:history"
 };
 
-/** @type {Record<string, { label: string, distances: { id: string, label: string, totalLaps: number }[] }>} */
-const SPORT_CONFIG = {
-  cycling: {
-    label: "Cycling",
-    distances: [
-      { id: "cycling-5k", label: "5k (12.5 laps)", totalLaps: 12.5 },
-      { id: "cycling-10k", label: "10k (25 laps)", totalLaps: 25 }
-    ]
-  },
-  sup: {
-    label: "Stand-Up Paddleboarding (SUP)",
-    distances: [
-      { id: "sup-1lap", label: "1 lap", totalLaps: 1 },
-      { id: "sup-2lap", label: "2 laps", totalLaps: 2 }
-    ]
-  }
-};
+const CYCLING_DISTANCES = [
+  { id: "cycling-5k", label: "5k (12.5 laps)", totalLaps: 12.5 },
+  { id: "cycling-10k", label: "10k (25 laps)", totalLaps: 25 }
+];
+
+const SPORT_LABELS = /** @type {Record<"cycling" | "sup", string>} */ ({
+  cycling: "Cycling",
+  sup: "Stand-Up Paddleboarding (SUP)"
+});
 
 const EVENT_TYPES = ["Practice", "Area Games", "Regional Games", "State Games"];
 const START_MODES = [
@@ -103,20 +99,29 @@ const START_MODES = [
   { id: "staggered", label: "Staggered start" }
 ];
 
+/** @type {{ cyclingDefaultStart: string, supDefaultStart: string, supMaxLaps: number }} */
+const defaultSettings = {
+  cyclingDefaultStart: "staggered",
+  supDefaultStart: "mass",
+  supMaxLaps: 12
+};
+
 /** @type {Setup} */
 const defaultSetup = {
   sport: "cycling",
   eventType: EVENT_TYPES[0],
   distanceId: "cycling-5k",
-  startMode: "mass",
-  selectedAthletes: []
+  startMode: "staggered",
+  selectedAthletes: [],
+  totalLaps: 12.5
 };
 
-/** @type {{ athletes: string[], setup: Setup, session: Session | null, history: ResultRecord[], resultsDraft: ResultRecord[], resultsSaved: boolean }} */
+/** @type {{ athletes: string[], setup: Setup, session: Session | null, settings: typeof defaultSettings, history: ResultRecord[], resultsDraft: ResultRecord[], resultsSaved: boolean }} */
 const state = {
   athletes: [],
   setup: { ...defaultSetup },
   session: null,
+  settings: { ...defaultSettings },
   history: [],
   resultsDraft: [],
   resultsSaved: true
@@ -128,12 +133,14 @@ const elements = {
     start: /** @type {HTMLElement} */ (getRequiredElement("#screen-start")),
     live: /** @type {HTMLElement} */ (getRequiredElement("#screen-live")),
     results: /** @type {HTMLElement} */ (getRequiredElement("#screen-results")),
+    settings: /** @type {HTMLElement} */ (getRequiredElement("#screen-settings")),
     history: /** @type {HTMLElement} */ (getRequiredElement("#screen-history"))
   },
   sportSelect: /** @type {HTMLSelectElement} */ (getRequiredElement("#sport-select")),
   eventSelect: /** @type {HTMLSelectElement} */ (getRequiredElement("#event-select")),
   distanceSelect: /** @type {HTMLSelectElement} */ (getRequiredElement("#distance-select")),
   startModeSelect: /** @type {HTMLSelectElement} */ (getRequiredElement("#start-mode-select")),
+  totalLapsInput: /** @type {HTMLInputElement} */ (getRequiredElement("#total-laps-input")),
   athleteInput: /** @type {HTMLInputElement} */ (getRequiredElement("#athlete-input")),
   addAthlete: /** @type {HTMLButtonElement} */ (getRequiredElement("#add-athlete")),
   athleteList: /** @type {HTMLElement} */ (getRequiredElement("#athlete-list")),
@@ -143,6 +150,7 @@ const elements = {
   startLive: /** @type {HTMLButtonElement} */ (getRequiredElement("#start-live")),
   backToSetup: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup")),
   backToSetup2: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup-2")),
+  backToSetup3: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup-3")),
   liveAthleteName: /** @type {HTMLElement} */ (getRequiredElement("#live-athlete-name")),
   liveAthleteIndex: /** @type {HTMLElement} */ (getRequiredElement("#live-athlete-index")),
   liveTimer: /** @type {HTMLElement} */ (getRequiredElement("#live-timer")),
@@ -156,7 +164,11 @@ const elements = {
   saveResults: /** @type {HTMLButtonElement} */ (getRequiredElement("#save-results")),
   exportResults: /** @type {HTMLButtonElement} */ (getRequiredElement("#export-results")),
   newRace: /** @type {HTMLButtonElement} */ (getRequiredElement("#new-race")),
+  settingsNav: /** @type {HTMLButtonElement} */ (getRequiredElement("#settings-nav")),
   historyNav: /** @type {HTMLButtonElement} */ (getRequiredElement("#history-nav")),
+  settingsCyclingStart: /** @type {HTMLSelectElement} */ (getRequiredElement("#settings-cycling-start")),
+  settingsSupStart: /** @type {HTMLSelectElement} */ (getRequiredElement("#settings-sup-start")),
+  settingsSupMax: /** @type {HTMLInputElement} */ (getRequiredElement("#settings-sup-max")),
   historyAthleteFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-athlete-filter")),
   historySportFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-sport-filter")),
   historyEventFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-event-filter")),
@@ -174,12 +186,21 @@ init();
 function init() {
   state.athletes = loadJson(STORAGE_KEYS.athletes, []);
   state.history = loadJson(STORAGE_KEYS.history, []);
+  state.settings = { ...defaultSettings, ...loadJson(STORAGE_KEYS.settings, {}) };
   state.setup = { ...defaultSetup, ...loadJson(STORAGE_KEYS.setup, {}) };
 
   renderSetupOptions();
+  if (!state.setup.totalLaps || Number.isNaN(state.setup.totalLaps)) {
+    const distance = findDistance(state.setup.distanceId);
+    state.setup.totalLaps = distance.totalLaps;
+  }
+  if (!state.setup.startMode) {
+    state.setup.startMode = getDefaultStartMode(coerceSport(state.setup.sport));
+  }
   renderAthleteList();
   renderHistoryFilters();
   renderHistoryList();
+  renderSettings();
   updateSetupSelections();
   bindEvents();
   updateStartButton();
@@ -188,8 +209,12 @@ function init() {
 function bindEvents() {
   elements.sportSelect.addEventListener("change", () => {
     state.setup.sport = elements.sportSelect.value;
-    const distances = SPORT_CONFIG[state.setup.sport].distances;
+    const sportKey = coerceSport(state.setup.sport);
+    state.setup.sport = sportKey;
+    const distances = getSportDistances(sportKey);
     state.setup.distanceId = distances[0].id;
+    state.setup.startMode = getDefaultStartMode(sportKey);
+    state.setup.totalLaps = distances[0].totalLaps;
     persistSetup();
     renderSetupOptions();
   });
@@ -201,12 +226,24 @@ function bindEvents() {
 
   elements.distanceSelect.addEventListener("change", () => {
     state.setup.distanceId = elements.distanceSelect.value;
+    const distance = findDistance(state.setup.distanceId);
+    state.setup.totalLaps = distance.totalLaps;
     persistSetup();
+    updateSetupSelections();
   });
 
   elements.startModeSelect.addEventListener("change", () => {
     state.setup.startMode = elements.startModeSelect.value;
     persistSetup();
+  });
+
+  elements.totalLapsInput.addEventListener("change", () => {
+    state.setup.totalLaps = parseLapInput();
+    persistSetup();
+  });
+
+  elements.totalLapsInput.addEventListener("input", () => {
+    state.setup.totalLaps = parseLapInput();
   });
 
   elements.addAthlete.addEventListener("click", () => {
@@ -249,6 +286,9 @@ function bindEvents() {
   elements.backToSetup2.addEventListener("click", () => {
     showScreen("setup");
   });
+  elements.backToSetup3.addEventListener("click", () => {
+    showScreen("setup");
+  });
 
   elements.prevAthlete.addEventListener("click", () => switchAthlete(-1));
   elements.nextAthlete.addEventListener("click", () => switchAthlete(1));
@@ -284,9 +324,35 @@ function bindEvents() {
     showScreen("history");
   });
 
+  elements.settingsNav.addEventListener("click", () => {
+    showScreen("settings");
+  });
+
   elements.exportHistory.addEventListener("click", () => {
     if (state.history.length === 0) return;
     downloadCsv(buildCsv(state.history), "all-results.csv");
+  });
+
+  elements.settingsCyclingStart.addEventListener("change", () => {
+    state.settings.cyclingDefaultStart = elements.settingsCyclingStart.value;
+    persistSettings();
+  });
+
+  elements.settingsSupStart.addEventListener("change", () => {
+    state.settings.supDefaultStart = elements.settingsSupStart.value;
+    persistSettings();
+  });
+
+  elements.settingsSupMax.addEventListener("change", () => {
+    const value = Number.parseInt(elements.settingsSupMax.value, 10);
+    state.settings.supMaxLaps = Number.isFinite(value) ? Math.min(12, Math.max(1, value)) : defaultSettings.supMaxLaps;
+    persistSettings();
+    renderSetupOptions();
+    if (state.setup.sport === "sup") {
+      state.setup.totalLaps = Math.min(state.settings.supMaxLaps, Math.max(1, state.setup.totalLaps));
+      updateSetupSelections();
+      persistSetup();
+    }
   });
 
   elements.historyAthleteFilter.addEventListener("change", renderHistoryList);
@@ -311,9 +377,11 @@ function bindEvents() {
 }
 
 function renderSetupOptions() {
-  elements.sportSelect.innerHTML = Object.entries(SPORT_CONFIG)
-    .map(([id, config]) => `<option value="${id}">${config.label}</option>`)
-    .join("");
+  const sportOptions = Object.keys(SPORT_LABELS).map((id) => {
+    const label = SPORT_LABELS[/** @type {"cycling" | "sup"} */ (id)];
+    return `<option value="${id}">${label}</option>`;
+  });
+  elements.sportSelect.innerHTML = sportOptions.join("");
 
   elements.eventSelect.innerHTML = EVENT_TYPES.map((event) => `<option value="${event}">${event}</option>`).join("");
 
@@ -321,7 +389,14 @@ function renderSetupOptions() {
     (mode) => `<option value="${mode.id}">${mode.label}</option>`
   ).join("");
 
-  const distances = SPORT_CONFIG[state.setup.sport].distances;
+  const sportKey = coerceSport(state.setup.sport);
+  state.setup.sport = sportKey;
+  const distances = getSportDistances(sportKey);
+  if (!distances.some((distance) => distance.id === state.setup.distanceId)) {
+    state.setup.distanceId = distances[0].id;
+    state.setup.totalLaps = distances[0].totalLaps;
+    persistSetup();
+  }
   elements.distanceSelect.innerHTML = distances
     .map((distance) => `<option value="${distance.id}">${distance.label}</option>`)
     .join("");
@@ -334,6 +409,10 @@ function updateSetupSelections() {
   elements.eventSelect.value = state.setup.eventType;
   elements.startModeSelect.value = state.setup.startMode;
   elements.distanceSelect.value = state.setup.distanceId;
+  elements.totalLapsInput.value = String(state.setup.totalLaps);
+  elements.totalLapsInput.step = state.setup.sport === "cycling" ? "0.5" : "1";
+  elements.totalLapsInput.min = state.setup.sport === "cycling" ? "0.5" : "1";
+  elements.totalLapsInput.max = state.setup.sport === "cycling" ? "200" : String(state.settings.supMaxLaps);
 }
 
 function renderAthleteList() {
@@ -387,12 +466,15 @@ function updateStartButton() {
 }
 
 function createSession() {
+  state.setup.totalLaps = parseLapInput();
   const distance = findDistance(state.setup.distanceId);
+  const sportKey = coerceSport(state.setup.sport);
+  state.setup.sport = sportKey;
   state.session = {
-    sport: SPORT_CONFIG[state.setup.sport].label,
+    sport: SPORT_LABELS[sportKey],
     eventType: state.setup.eventType,
     distance: distance.label,
-    totalLaps: distance.totalLaps,
+    totalLaps: state.setup.totalLaps,
     startMode: state.setup.startMode,
     participants: [...state.setup.selectedAthletes],
     athleteTimings: {},
@@ -403,7 +485,7 @@ function createSession() {
   session.participants.forEach((name) => {
     session.athleteTimings[name] = {
       athleteName: name,
-      totalLaps: distance.totalLaps,
+      totalLaps: state.setup.totalLaps,
       startTime: null,
       lapTimestamps: [],
       lapSplitsMs: [],
@@ -752,6 +834,10 @@ function showScreen(name) {
     renderHistoryFilters();
     renderHistoryList();
   }
+
+  if (name === "settings") {
+    renderSettings();
+  }
 }
 
 function resetSession() {
@@ -810,6 +896,10 @@ function persistHistory() {
   localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(state.history));
 }
 
+function persistSettings() {
+  localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
+}
+
 /**
  * @template T
  * @param {string} key
@@ -831,8 +921,53 @@ function loadJson(key, fallback) {
  * @returns {{ id: string, label: string, totalLaps: number }}
  */
 function findDistance(id) {
-  const configs = Object.values(SPORT_CONFIG).flatMap((sport) => sport.distances);
+  const configs = getSportDistances("cycling").concat(getSportDistances("sup"));
   return configs.find((distance) => distance.id === id) ?? configs[0];
+}
+
+/**
+ * @param {"cycling" | "sup"} sport
+ */
+function getSportDistances(sport) {
+  if (sport === "cycling") return CYCLING_DISTANCES;
+  return buildSupDistances(state.settings.supMaxLaps);
+}
+
+/**
+ * @param {"cycling" | "sup"} sport
+ * @returns {string}
+ */
+function getDefaultStartMode(sport) {
+  return sport === "cycling" ? state.settings.cyclingDefaultStart : state.settings.supDefaultStart;
+}
+
+/**
+ * @param {string} sport
+ * @returns {"cycling" | "sup"}
+ */
+function coerceSport(sport) {
+  return sport === "sup" ? "sup" : "cycling";
+}
+
+function renderSettings() {
+  elements.settingsCyclingStart.innerHTML = START_MODES.map(
+    (mode) => `<option value="${mode.id}">${mode.label}</option>`
+  ).join("");
+  elements.settingsSupStart.innerHTML = START_MODES.map(
+    (mode) => `<option value="${mode.id}">${mode.label}</option>`
+  ).join("");
+
+  elements.settingsCyclingStart.value = state.settings.cyclingDefaultStart;
+  elements.settingsSupStart.value = state.settings.supDefaultStart;
+  elements.settingsSupMax.value = String(state.settings.supMaxLaps);
+}
+
+function parseLapInput() {
+  const raw = Number.parseFloat(elements.totalLapsInput.value);
+  const min = state.setup.sport === "cycling" ? 0.5 : 1;
+  const max = state.setup.sport === "cycling" ? 200 : state.settings.supMaxLaps;
+  const step = state.setup.sport === "cycling" ? 0.5 : 1;
+  return coerceLapCount(raw, min, max, step);
 }
 
 /**
@@ -868,4 +1003,5 @@ function flashButton(button) {
 window.addEventListener("beforeunload", () => {
   persistSetup();
   persistAthletes();
+  persistSettings();
 });
