@@ -7,6 +7,7 @@
     "test:watch": "vitest",
     "devl": "python3 -m http.server 5173",
     "wrangler:login": "wrangler login",
+    "wrangler:publish": "wrangler pages deploy . --project-name coachtimer",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check": "npm run lint && npm run typecheck && npm run test"
