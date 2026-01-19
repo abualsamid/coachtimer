@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Special Olympics Timing</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Special Olympics</p>
+        <h1>Multi-Sport Timing</h1>
+      </div>
+      <button class="ghost" id="history-nav" type="button">History</button>
+    </header>
+    <main>
+      <section id="screen-setup" class="screen active" aria-labelledby="setup-title">
+        <h2 id="setup-title">Setup</h2>
+        <div class="card">
+          <label class="field">
+            <span>Sport</span>
+            <select id="sport-select"></select>
+          </label>
+          <label class="field">
+            <span>Event Type</span>
+            <select id="event-select"></select>
+          </label>
+          <label class="field">
+            <span>Distance</span>
+            <select id="distance-select"></select>
+          </label>
+          <label class="field">
+            <span>Start Mode</span>
+            <select id="start-mode-select"></select>
+          </label>
+        </div>
+
+        <div class="card">
+          <h3>Athletes</h3>
+          <div class="inline">
+            <input id="athlete-input" type="text" placeholder="Add athlete name" autocomplete="off" />
+            <button id="add-athlete" class="primary" type="button">Add</button>
+          </div>
+          <div id="athlete-list" class="athlete-list" aria-live="polite"></div>
+        </div>
+
+        <button id="start-setup" class="primary xl" type="button">Start Timing</button>
+      </section>
+
+      <section id="screen-start" class="screen" aria-labelledby="start-title">
+        <h2 id="start-title">Start Control</h2>
+        <p id="start-context" class="muted"></p>
+        <div id="start-controls" class="card"></div>
+        <button id="start-live" class="primary xl" type="button">Go to Live Timing</button>
+        <button id="back-to-setup" class="ghost" type="button">Back to Setup</button>
+      </section>
+
+      <section id="screen-live" class="screen live" aria-labelledby="live-title">
+        <h2 id="live-title" class="visually-hidden">Live Timing</h2>
+        <div class="live-header">
+          <button id="prev-athlete" class="ghost" type="button">◀</button>
+          <div>
+            <p class="eyebrow">Active Athlete</p>
+            <h3 id="live-athlete-name">—</h3>
+            <p id="live-athlete-index" class="muted"></p>
+          </div>
+          <button id="next-athlete" class="ghost" type="button">▶</button>
+        </div>
+        <div class="live-timer" id="live-timer">00:00.000</div>
+        <div class="live-meta">
+          <p id="lap-counter">Lap 0 / 0</p>
+          <p id="last-split" class="muted">Last split: —</p>
+        </div>
+        <div class="live-actions">
+          <button id="lap-button" class="primary xl" type="button">Lap</button>
+          <button id="finish-button" class="danger xl" type="button" disabled>Finish</button>
+        </div>
+        <p class="muted center">Swipe left/right to switch athletes.</p>
+      </section>
+
+      <section id="screen-results" class="screen" aria-labelledby="results-title">
+        <h2 id="results-title">Results Summary</h2>
+        <div id="results-list" class="results-list"></div>
+        <div class="stack">
+          <button id="save-results" class="primary" type="button">Save Results</button>
+          <button id="export-results" class="ghost" type="button">Export CSV</button>
+          <button id="new-race" class="ghost" type="button">Start New Race</button>
+        </div>
+      </section>
+
+      <section id="screen-history" class="screen" aria-labelledby="history-title">
+        <h2 id="history-title">History</h2>
+        <div class="card">
+          <label class="field">
+            <span>Athlete</span>
+            <select id="history-athlete-filter"></select>
+          </label>
+          <label class="field">
+            <span>Sport</span>
+            <select id="history-sport-filter"></select>
+          </label>
+          <label class="field">
+            <span>Event Type</span>
+            <select id="history-event-filter"></select>
+          </label>
+        </div>
+        <div class="stack">
+          <button id="export-history" class="ghost" type="button">Export All CSV</button>
+          <button id="back-to-setup-2" class="primary" type="button">Back to Setup</button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
