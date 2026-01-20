@@ -1,7 +1,6 @@
 // @ts-check
 import {
   buildCsv,
-  canFinish,
   buildSupDistances,
   coerceLapCount,
   computeLapSplits,
@@ -147,7 +146,6 @@ const elements = {
   startSetup: /** @type {HTMLButtonElement} */ (getRequiredElement("#start-setup")),
   startContext: /** @type {HTMLElement} */ (getRequiredElement("#start-context")),
   startControls: /** @type {HTMLElement} */ (getRequiredElement("#start-controls")),
-  startLive: /** @type {HTMLButtonElement} */ (getRequiredElement("#start-live")),
   backToSetup: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup")),
   backToSetup2: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup-2")),
   backToSetup3: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup-3")),
@@ -164,11 +162,13 @@ const elements = {
   saveResults: /** @type {HTMLButtonElement} */ (getRequiredElement("#save-results")),
   exportResults: /** @type {HTMLButtonElement} */ (getRequiredElement("#export-results")),
   newRace: /** @type {HTMLButtonElement} */ (getRequiredElement("#new-race")),
+  homeNav: /** @type {HTMLButtonElement} */ (getRequiredElement("#home-nav")),
   settingsNav: /** @type {HTMLButtonElement} */ (getRequiredElement("#settings-nav")),
   historyNav: /** @type {HTMLButtonElement} */ (getRequiredElement("#history-nav")),
   settingsCyclingStart: /** @type {HTMLSelectElement} */ (getRequiredElement("#settings-cycling-start")),
   settingsSupStart: /** @type {HTMLSelectElement} */ (getRequiredElement("#settings-sup-start")),
   settingsSupMax: /** @type {HTMLInputElement} */ (getRequiredElement("#settings-sup-max")),
+  liveSplits: /** @type {HTMLElement} */ (getRequiredElement("#live-splits")),
   historyAthleteFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-athlete-filter")),
   historySportFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-sport-filter")),
   historyEventFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-event-filter")),
@@ -273,13 +273,6 @@ function bindEvents() {
     renderStartControls();
   });
 
-  elements.startLive.addEventListener("click", () => {
-    if (!state.session) return;
-    if (!allAthletesStarted()) return;
-    showScreen("live");
-    startLiveTimer();
-  });
-
   elements.backToSetup.addEventListener("click", () => {
     showScreen("setup");
   });
@@ -317,6 +310,10 @@ function bindEvents() {
       if (!ok) return;
     }
     resetSession();
+    showScreen("setup");
+  });
+
+  elements.homeNav.addEventListener("click", () => {
     showScreen("setup");
   });
 
@@ -517,7 +514,6 @@ function renderStartControls() {
       startLiveTimer();
     });
     elements.startControls.appendChild(button);
-    elements.startLive.disabled = true;
     return;
   }
 
@@ -534,7 +530,6 @@ function renderStartControls() {
     button.addEventListener("click", () => {
       startAthlete(name, Date.now());
       button.disabled = true;
-      elements.startLive.disabled = !allAthletesStarted();
       if (allAthletesStarted()) {
         showScreen("live");
         startLiveTimer();
@@ -545,7 +540,6 @@ function renderStartControls() {
     elements.startControls.appendChild(card);
   });
 
-  elements.startLive.disabled = !allAthletesStarted();
 }
 
 /**
@@ -605,7 +599,7 @@ function recordLap() {
 function finishAthlete() {
   const athlete = getActiveAthleteTiming();
   if (!athlete || athlete.startTime === null || athlete.finishTime !== null) return;
-  if (!canFinish(athlete.lapTimestamps, athlete.totalLaps)) return;
+  if (!isFinishReady(athlete.totalLaps, athlete.lapTimestamps.length)) return;
   athlete.finishTime = Date.now();
   updateLiveView();
 
@@ -760,6 +754,18 @@ function renderHistoryList() {
     const date = document.createElement("p");
     date.textContent = `Date: ${new Date(result.dateISO).toLocaleString()}`;
 
+    const splitList = document.createElement("div");
+    splitList.className = "split-list";
+    if (result.lapSplitsMs.length === 0) {
+      splitList.innerHTML = "<p class=\"muted\">No lap splits recorded.</p>";
+    } else {
+      result.lapSplitsMs.forEach((split, splitIndex) => {
+        const splitItem = document.createElement("p");
+        splitItem.textContent = `Lap ${splitIndex + 1}: ${formatDuration(split)}`;
+        splitList.appendChild(splitItem);
+      });
+    }
+
     const deleteButton = document.createElement("button");
     deleteButton.className = "ghost";
     deleteButton.type = "button";
@@ -776,6 +782,7 @@ function renderHistoryList() {
     card.appendChild(summary);
     card.appendChild(total);
     card.appendChild(date);
+    card.appendChild(splitList);
     card.appendChild(deleteButton);
     elements.historyList.appendChild(card);
   });
@@ -804,9 +811,18 @@ function updateLiveView() {
   const lastSplit = athlete.lapSplitsMs.at(-1);
   elements.lastSplit.textContent = lastSplit ? `Last split: ${formatDuration(lastSplit)}` : "Last split: —";
 
-  const finishReady = canFinish(athlete.lapTimestamps, athlete.totalLaps);
+  const finishReady = isFinishReady(athlete.totalLaps, lapCount);
+  const showFinish = shouldShowFinish(athlete.totalLaps, lapCount);
+  const firstName = getFirstName(athlete.athleteName);
+  const truncated = truncateName(firstName, 12);
+  elements.lapButton.textContent = `Lap ${truncated}`;
+  elements.finishButton.textContent = `Finish ${truncated}`;
+  elements.finishButton.hidden = !showFinish;
+  elements.lapButton.hidden = showFinish;
   elements.finishButton.disabled = !finishReady || athlete.finishTime !== null;
   elements.lapButton.disabled = athlete.finishTime !== null;
+
+  renderLiveSplits(athlete.lapSplitsMs);
 }
 
 /**
@@ -968,6 +984,62 @@ function parseLapInput() {
   const max = state.setup.sport === "cycling" ? 200 : state.settings.supMaxLaps;
   const step = state.setup.sport === "cycling" ? 0.5 : 1;
   return coerceLapCount(raw, min, max, step);
+}
+
+/**
+ * @param {number[]} splits
+ */
+function renderLiveSplits(splits) {
+  elements.liveSplits.innerHTML = "";
+  if (splits.length === 0) {
+    elements.liveSplits.innerHTML = "<p class=\"muted\">No laps yet.</p>";
+    return;
+  }
+  splits.forEach((split, index) => {
+    const item = document.createElement("p");
+    item.textContent = `Lap ${index + 1}: ${formatDuration(split)}`;
+    elements.liveSplits.appendChild(item);
+  });
+}
+
+/**
+ * @param {number} totalLaps
+ * @param {number} lapCount
+ * @returns {boolean}
+ */
+function shouldShowFinish(totalLaps, lapCount) {
+  if (Number.isInteger(totalLaps)) {
+    return lapCount >= Math.max(0, totalLaps - 1);
+  }
+  return lapCount >= Math.floor(totalLaps);
+}
+
+/**
+ * @param {number} totalLaps
+ * @param {number} lapCount
+ * @returns {boolean}
+ */
+function isFinishReady(totalLaps, lapCount) {
+  return shouldShowFinish(totalLaps, lapCount);
+}
+
+/**
+ * @param {string} name
+ * @param {number} maxChars
+ * @returns {string}
+ */
+function truncateName(name, maxChars) {
+  if (name.length <= maxChars) return name;
+  return `${name.slice(0, maxChars)}...`;
+}
+
+/**
+ * @param {string} name
+ * @returns {string}
+ */
+function getFirstName(name) {
+  const parts = name.trim().split(/\s+/);
+  return parts[0] || name;
 }
 
 /**
