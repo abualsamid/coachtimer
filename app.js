@@ -149,6 +149,7 @@ const elements = {
   backToSetup: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup")),
   backToSetup2: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup-2")),
   backToSetup3: /** @type {HTMLButtonElement} */ (getRequiredElement("#back-to-setup-3")),
+  liveHeader: /** @type {HTMLElement} */ (getRequiredElement("#live-header")),
   liveAthleteName: /** @type {HTMLElement} */ (getRequiredElement("#live-athlete-name")),
   liveAthleteIndex: /** @type {HTMLElement} */ (getRequiredElement("#live-athlete-index")),
   liveTimer: /** @type {HTMLElement} */ (getRequiredElement("#live-timer")),
@@ -760,9 +761,15 @@ function renderHistoryList() {
     if (result.lapSplitsMs.length === 0) {
       splitList.innerHTML = "<p class=\"muted\">No lap splits recorded.</p>";
     } else {
-      result.lapSplitsMs.forEach((split, splitIndex) => {
-        const splitItem = document.createElement("p");
-        splitItem.textContent = `Lap ${splitIndex + 1}: ${formatDuration(split)}`;
+      const total = result.lapSplitsMs.reduce((sum, value) => sum + value, 0);
+      const average = Math.round(total / result.lapSplitsMs.length);
+      const fastest = Math.min(...result.lapSplitsMs);
+      const averageItem = document.createElement("p");
+      averageItem.className = "live-average";
+      averageItem.textContent = `Average: ${formatDuration(average)}`;
+      splitList.appendChild(averageItem);
+      result.lapSplitsMs.forEach((_, splitIndex) => {
+        const splitItem = buildSplitItem(result.lapSplitsMs, splitIndex, average, fastest, "live-split");
         splitList.appendChild(splitItem);
       });
     }
@@ -810,6 +817,7 @@ function updateLiveView() {
   elements.prevAthlete.hidden = !hasMultipleAthletes;
   elements.nextAthlete.hidden = !hasMultipleAthletes;
   elements.liveSwipeHint.hidden = !hasMultipleAthletes;
+  elements.liveHeader.classList.toggle("single", !hasMultipleAthletes);
 
   const lapCount = athlete.lapTimestamps.length;
   elements.lapCounter.textContent = `Lap ${lapCount} / ${athlete.totalLaps}`;
@@ -1000,10 +1008,19 @@ function renderLiveSplits(splits) {
     elements.liveSplits.innerHTML = "<p class=\"muted\">No laps yet.</p>";
     return;
   }
-  for (let index = splits.length - 1; index >= 0; index -= 1) {
-    const split = splits[index];
-    const item = document.createElement("p");
-    item.textContent = `Lap ${index + 1}: ${formatDuration(split)}`;
+  const total = splits.reduce((sum, value) => sum + value, 0);
+  const average = Math.round(total / splits.length);
+  const fastest = Math.min(...splits);
+  const maxItems = 5;
+  const startIndex = Math.max(0, splits.length - maxItems);
+
+  const averageItem = document.createElement("p");
+  averageItem.className = "live-average";
+  averageItem.textContent = `Average: ${formatDuration(average)}`;
+  elements.liveSplits.appendChild(averageItem);
+
+  for (let index = splits.length - 1; index >= startIndex; index -= 1) {
+    const item = buildSplitItem(splits, index, average, fastest, "live-split");
     elements.liveSplits.appendChild(item);
   }
 }
@@ -1046,6 +1063,32 @@ function truncateName(name, maxChars) {
 function getFirstName(name) {
   const parts = name.trim().split(/\s+/);
   return parts[0] || name;
+}
+
+/**
+ * @param {number[]} splits
+ * @param {number} index
+ * @param {number} average
+ * @param {number} fastest
+ * @param {string} baseClass
+ * @returns {HTMLElement}
+ */
+function buildSplitItem(splits, index, average, fastest, baseClass) {
+  const split = splits[index];
+  const item = document.createElement("p");
+  const isFasterThanAverage = split < average;
+  const isSlowerThanAverage = split > average;
+  const isBest = split === fastest;
+  const previousSplit = index > 0 ? splits[index - 1] : null;
+  const improved = previousSplit !== null && split < previousSplit;
+  const classes = [baseClass];
+  if (isFasterThanAverage) classes.push("fast");
+  if (isSlowerThanAverage) classes.push("slow");
+  if (isBest) classes.push("best");
+  if (improved) classes.push("improve");
+  item.className = classes.join(" ");
+  item.textContent = `Lap ${index + 1}: ${formatDuration(split)}${improved ? " +" : ""}`;
+  return item;
 }
 
 /**

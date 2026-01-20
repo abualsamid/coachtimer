@@ -259,6 +259,11 @@ textarea:focus-visible {
   text-align: center;
 }
 
+.live-header.single {
+  grid-template-columns: 1fr;
+  justify-items: center;
+}
+
 .live-timer {
   font-size: 2.6rem;
   font-weight: 800;
@@ -305,6 +310,22 @@ textarea:focus-visible {
 .split-list {
   display: grid;
   gap: 6px;
+}
+
+.live-average {
+  font-weight: 700;
+}
+
+.live-split.fast {
+  color: #0d5f4b;
+}
+
+.live-split.slow {
+  color: #b03a2e;
+}
+
+.live-split.best {
+  font-weight: 800;
 }
 
 .stack {
