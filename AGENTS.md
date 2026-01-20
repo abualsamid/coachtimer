@@ -13,6 +13,7 @@ This is an offline-first, client-only JavaScript app served from a static host a
 - `npm run lint`: run ESLint across the repo.
 - `npm run typecheck`: run TypeScript in `checkJs` mode (no emit).
 - `npm run check`: run lint, typecheck, and tests in sequence.
+- `npm run wrangler:deploy-create`: create a Pages deployment (requires a clean git status).
 
 ## Coding Style & Naming Conventions
 JavaScript only; do not add TypeScript source files. Maximize type checking via JSDoc annotations and `tsc --checkJs`. Use `camelCase` for variables/functions and `PascalCase` for constructors/classes. Prefer named exports.
@@ -27,3 +28,7 @@ No commit conventions are detectable yet due to the empty history. When establis
 
 ## Configuration & Secrets
 Do not commit secrets. If configuration is required, prefer environment variables and provide a checked-in template such as `.env.example`.
+
+## Deployment
+- Deploy only from a clean repo (no uncommitted or untracked changes).
+- Commit and push before running any deploy script.
