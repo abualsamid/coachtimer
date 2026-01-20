@@ -19,6 +19,8 @@ import {
  * @property {number[]} lapTimestamps
  * @property {number[]} lapSplitsMs
  * @property {number | null} finishTime
+ * @property {number} lastLapTap
+ * @property {number} lastFinishTap
  */
 
 /**
@@ -105,6 +107,9 @@ const defaultSettings = {
   supMaxLaps: 12
 };
 
+const MIN_LAP_GAP_MS = 2000;
+const MIN_FINISH_GAP_MS = 2000;
+
 /** @type {Setup} */
 const defaultSetup = {
   sport: "cycling",
@@ -182,6 +187,8 @@ const elements = {
 let liveTimerHandle = null;
 /** @type {number | null} */
 let touchStartX = null;
+/** @type {WakeLockSentinel | null} */
+let wakeLock = null;
 
 init();
 
@@ -488,7 +495,9 @@ function createSession() {
       startTime: null,
       lapTimestamps: [],
       lapSplitsMs: [],
-      finishTime: null
+      finishTime: null,
+      lastLapTap: 0,
+      lastFinishTap: 0
     };
   });
 
@@ -563,6 +572,7 @@ function allAthletesStarted() {
 function startLiveTimer() {
   stopLiveTimer();
   updateLiveView();
+  requestWakeLock();
   const tick = () => {
     updateLiveTimer();
     liveTimerHandle = requestAnimationFrame(tick);
@@ -575,6 +585,7 @@ function stopLiveTimer() {
     cancelAnimationFrame(liveTimerHandle);
     liveTimerHandle = null;
   }
+  releaseWakeLock();
 }
 
 function updateLiveTimer() {
@@ -592,6 +603,8 @@ function recordLap() {
   const athlete = getActiveAthleteTiming();
   if (!athlete || athlete.startTime === null || athlete.finishTime !== null) return;
   const now = Date.now();
+  if (now - athlete.lastLapTap < MIN_LAP_GAP_MS) return;
+  athlete.lastLapTap = now;
   athlete.lapTimestamps.push(now);
   athlete.lapSplitsMs = computeLapSplits(athlete.startTime, athlete.lapTimestamps);
   updateLiveView();
@@ -602,7 +615,10 @@ function finishAthlete() {
   const athlete = getActiveAthleteTiming();
   if (!athlete || athlete.startTime === null || athlete.finishTime !== null) return;
   if (!isFinishReady(athlete.totalLaps, athlete.lapTimestamps.length)) return;
-  athlete.finishTime = Date.now();
+  const now = Date.now();
+  if (now - athlete.lastFinishTap < MIN_FINISH_GAP_MS) return;
+  athlete.lastFinishTap = now;
+  athlete.finishTime = now;
   updateLiveView();
 
   if (allAthletesFinished()) {
@@ -857,6 +873,7 @@ function showScreen(name) {
 
   if (name !== "live") {
     stopLiveTimer();
+    releaseWakeLock();
   }
 
   if (name === "history") {
@@ -1011,15 +1028,13 @@ function renderLiveSplits(splits) {
   const total = splits.reduce((sum, value) => sum + value, 0);
   const average = Math.round(total / splits.length);
   const fastest = Math.min(...splits);
-  const maxItems = 5;
-  const startIndex = Math.max(0, splits.length - maxItems);
 
   const averageItem = document.createElement("p");
   averageItem.className = "live-average";
   averageItem.textContent = `Average: ${formatDuration(average)}`;
   elements.liveSplits.appendChild(averageItem);
 
-  for (let index = splits.length - 1; index >= startIndex; index -= 1) {
+  for (let index = splits.length - 1; index >= 0; index -= 1) {
     const item = buildSplitItem(splits, index, average, fastest, "live-split");
     elements.liveSplits.appendChild(item);
   }
@@ -1126,3 +1141,18 @@ window.addEventListener("beforeunload", () => {
   persistAthletes();
   persistSettings();
 });
+
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+  } catch {
+    wakeLock = null;
+  }
+}
+
+function releaseWakeLock() {
+  if (!wakeLock) return;
+  wakeLock.release().catch(() => {});
+  wakeLock = null;
+}
