@@ -1,6 +1,7 @@
-const CACHE_VERSION = "v1.0.0";
+const CACHE_VERSION = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
 const STATIC_CACHE = `coachtimer-static-${CACHE_VERSION}`;
 const HTML_CACHE = `coachtimer-html-${CACHE_VERSION}`;
+const IS_LOCAL = self.location.hostname === "localhost" || self.location.hostname === "127.0.0.1";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -27,6 +28,11 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (IS_LOCAL) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   const isHtml = request.mode === "navigate" || request.destination === "document";
   const isStatic = request.destination === "script" || request.destination === "style";

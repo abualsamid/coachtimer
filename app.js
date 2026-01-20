@@ -158,6 +158,7 @@ const elements = {
   finishButton: /** @type {HTMLButtonElement} */ (getRequiredElement("#finish-button")),
   prevAthlete: /** @type {HTMLButtonElement} */ (getRequiredElement("#prev-athlete")),
   nextAthlete: /** @type {HTMLButtonElement} */ (getRequiredElement("#next-athlete")),
+  liveSwipeHint: /** @type {HTMLElement} */ (getRequiredElement("#live-swipe-hint")),
   resultsList: /** @type {HTMLElement} */ (getRequiredElement("#results-list")),
   saveResults: /** @type {HTMLButtonElement} */ (getRequiredElement("#save-results")),
   exportResults: /** @type {HTMLButtonElement} */ (getRequiredElement("#export-results")),
@@ -805,6 +806,10 @@ function updateLiveView() {
   const index = state.session.participants.indexOf(athlete.athleteName) + 1;
   elements.liveAthleteName.textContent = athlete.athleteName;
   elements.liveAthleteIndex.textContent = `${index} of ${state.session.participants.length}`;
+  const hasMultipleAthletes = state.session.participants.length > 1;
+  elements.prevAthlete.hidden = !hasMultipleAthletes;
+  elements.nextAthlete.hidden = !hasMultipleAthletes;
+  elements.liveSwipeHint.hidden = !hasMultipleAthletes;
 
   const lapCount = athlete.lapTimestamps.length;
   elements.lapCounter.textContent = `Lap ${lapCount} / ${athlete.totalLaps}`;
@@ -995,11 +1000,12 @@ function renderLiveSplits(splits) {
     elements.liveSplits.innerHTML = "<p class=\"muted\">No laps yet.</p>";
     return;
   }
-  splits.forEach((split, index) => {
+  for (let index = splits.length - 1; index >= 0; index -= 1) {
+    const split = splits[index];
     const item = document.createElement("p");
     item.textContent = `Lap ${index + 1}: ${formatDuration(split)}`;
     elements.liveSplits.appendChild(item);
-  });
+  }
 }
 
 /**
