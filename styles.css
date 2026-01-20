@@ -39,6 +39,23 @@ body.mode-live {
   z-index: 5;
 }
 
+.header-home {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.header-home h1,
+.header-home .eyebrow {
+  pointer-events: none;
+}
+
 .header-actions {
   display: flex;
   gap: 8px;
@@ -69,6 +86,14 @@ main {
 .screen.active {
   display: flex;
   flex-direction: column;
+}
+
+#screen-setup {
+  min-height: calc(100vh - 90px);
+}
+
+#screen-setup #start-setup {
+  margin-top: auto;
 }
 
 .screen.live {
@@ -250,6 +275,12 @@ textarea:focus-visible {
 .live-actions {
   display: grid;
   gap: 12px;
+  width: 100%;
+}
+
+.live-actions button {
+  text-align: center;
+  width: 100%;
 }
 
 .results-list,
@@ -292,9 +323,5 @@ textarea:focus-visible {
   main {
     max-width: 720px;
     margin: 0 auto;
-  }
-
-  .live-actions {
-    grid-template-columns: 1fr 1fr;
   }
 }

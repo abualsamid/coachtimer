@@ -8,10 +8,10 @@
   </head>
   <body>
     <header class="app-header">
-      <div>
+      <button class="header-home" id="home-nav" type="button" aria-label="Go to setup">
         <p class="eyebrow">Special Olympics</p>
         <h1>Multi-Sport Timing</h1>
-      </div>
+      </button>
       <div class="header-actions">
         <button class="ghost" id="settings-nav" type="button">Settings</button>
         <button class="ghost" id="history-nav" type="button">History</button>
@@ -59,7 +59,6 @@
         <h2 id="start-title">Start Control</h2>
         <p id="start-context" class="muted"></p>
         <div id="start-controls" class="card"></div>
-        <button id="start-live" class="primary xl" type="button">Go to Live Timing</button>
         <button id="back-to-setup" class="ghost" type="button">Back to Setup</button>
       </section>
 
@@ -83,6 +82,7 @@
           <button id="lap-button" class="primary xl" type="button">Lap</button>
           <button id="finish-button" class="danger xl" type="button" disabled>Finish</button>
         </div>
+        <div id="live-splits" class="split-list"></div>
         <p class="muted center">Swipe left/right to switch athletes.</p>
       </section>
 
