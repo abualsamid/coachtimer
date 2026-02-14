@@ -43,7 +43,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isStatic) {
-    event.respondWith(cacheFirstStatic(request));
+    event.respondWith(networkFirstStatic(request));
   }
 });
 
@@ -59,16 +59,14 @@ async function networkFirstHtml(request) {
   }
 }
 
-async function cacheFirstStatic(request) {
-  const cached = await caches.match(request);
-  if (cached) return cached;
-
+async function networkFirstStatic(request) {
   try {
     const response = await fetch(request);
     const cache = await caches.open(STATIC_CACHE);
     cache.put(request, response.clone());
     return response;
   } catch {
-    return new Response("", { status: 503, statusText: "Offline" });
+    const cached = await caches.match(request);
+    return cached || new Response("", { status: 503, statusText: "Offline" });
   }
 }
