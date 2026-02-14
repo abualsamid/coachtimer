@@ -99,6 +99,13 @@ const START_MODES = [
   { id: "mass", label: "Mass start" },
   { id: "staggered", label: "Staggered start" }
 ];
+const LIVE_ATHLETE_ACCENTS = [
+  { primary: "#0d5f4b", dark: "#084237" },
+  { primary: "#1d4ed8", dark: "#1e40af" },
+  { primary: "#15803d", dark: "#166534" },
+  { primary: "#0ea5e9", dark: "#0369a1" },
+  { primary: "#14532d", dark: "#052e16" }
+];
 
 /** @type {{ cyclingDefaultStart: string, supDefaultStart: string, supMaxLaps: number }} */
 const defaultSettings = {
@@ -158,6 +165,8 @@ const elements = {
   liveAthleteName: /** @type {HTMLElement} */ (getRequiredElement("#live-athlete-name")),
   liveAthleteIndex: /** @type {HTMLElement} */ (getRequiredElement("#live-athlete-index")),
   liveTimer: /** @type {HTMLElement} */ (getRequiredElement("#live-timer")),
+  liveSwitchFlash: /** @type {HTMLElement} */ (getRequiredElement("#live-switch-flash")),
+  currentLapTimer: /** @type {HTMLElement} */ (getRequiredElement("#current-lap-timer")),
   lapCounter: /** @type {HTMLElement} */ (getRequiredElement("#lap-counter")),
   lastSplit: /** @type {HTMLElement} */ (getRequiredElement("#last-split")),
   lapButton: /** @type {HTMLButtonElement} */ (getRequiredElement("#lap-button")),
@@ -189,6 +198,10 @@ let liveTimerHandle = null;
 let touchStartX = null;
 /** @type {WakeLockSentinel | null} */
 let wakeLock = null;
+/** @type {number | null} */
+let liveSwitchFlashTimeout = null;
+/** @type {string | null} */
+let lastLiveAthleteName = null;
 
 init();
 
@@ -476,6 +489,8 @@ function createSession() {
   const distance = findDistance(state.setup.distanceId);
   const sportKey = coerceSport(state.setup.sport);
   state.setup.sport = sportKey;
+  lastLiveAthleteName = null;
+  hideLiveSwitchFlash();
   state.session = {
     sport: SPORT_LABELS[sportKey],
     eventType: state.setup.eventType,
@@ -536,11 +551,10 @@ function renderStartControls() {
     const button = document.createElement("button");
     button.className = "primary";
     button.type = "button";
-    button.textContent = "Start";
-    button.disabled = Boolean(state.session?.athleteTimings[name].startTime);
+    setStaggeredStartButtonState(button, Boolean(state.session?.athleteTimings[name].startTime));
     button.addEventListener("click", () => {
       startAthlete(name, Date.now());
-      button.disabled = true;
+      setStaggeredStartButtonState(button, true);
       if (allAthletesStarted()) {
         showScreen("live");
         startLiveTimer();
@@ -551,6 +565,16 @@ function renderStartControls() {
     elements.startControls.appendChild(card);
   });
 
+}
+
+/**
+ * @param {HTMLButtonElement} button
+ * @param {boolean} hasStarted
+ */
+function setStaggeredStartButtonState(button, hasStarted) {
+  button.textContent = hasStarted ? "Started" : "Start";
+  button.classList.toggle("is-started", hasStarted);
+  button.disabled = hasStarted;
 }
 
 /**
@@ -592,11 +616,14 @@ function updateLiveTimer() {
   const athlete = getActiveAthleteTiming();
   if (!athlete || athlete.startTime === null) {
     elements.liveTimer.textContent = "00:00.000";
+    elements.currentLapTimer.textContent = "Current lap: —";
     return;
   }
-  const finishTime = athlete.finishTime ?? Date.now();
+  const now = Date.now();
+  const finishTime = athlete.finishTime ?? now;
   const total = computeTotalTime(athlete.startTime, finishTime) ?? 0;
   elements.liveTimer.textContent = formatDuration(total);
+  updateCurrentLapTimer(athlete, now);
 }
 
 function recordLap() {
@@ -607,6 +634,7 @@ function recordLap() {
   athlete.lastLapTap = now;
   athlete.lapTimestamps.push(now);
   athlete.lapSplitsMs = computeLapSplits(athlete.startTime, athlete.lapTimestamps);
+  advanceToNextUnfinishedAthlete();
   updateLiveView();
   flashButton(elements.lapButton);
 }
@@ -619,17 +647,38 @@ function finishAthlete() {
   if (now - athlete.lastFinishTap < MIN_FINISH_GAP_MS) return;
   athlete.lastFinishTap = now;
   athlete.finishTime = now;
-  updateLiveView();
 
   if (allAthletesFinished()) {
     finalizeResults();
     showScreen("results");
+    return;
   }
+  advanceToNextUnfinishedAthlete();
+  updateLiveView();
 }
 
 function allAthletesFinished() {
   if (!state.session) return false;
   return state.session.participants.every((name) => state.session?.athleteTimings[name].finishTime !== null);
+}
+
+function advanceToNextUnfinishedAthlete() {
+  if (!state.session || state.session.startMode !== "staggered") return;
+  const participants = state.session.participants;
+  if (participants.length < 2) return;
+  const count = participants.length;
+  const currentIndex = state.session.activeIndex;
+
+  for (let step = 1; step <= count; step += 1) {
+    const candidateIndex = (currentIndex + step) % count;
+    const candidateName = participants[candidateIndex];
+    const candidateTiming = state.session.athleteTimings[candidateName];
+    if (candidateTiming.finishTime !== null) continue;
+    if (candidateIndex !== currentIndex) {
+      state.session.activeIndex = candidateIndex;
+    }
+    return;
+  }
 }
 
 function finalizeResults() {
@@ -826,6 +875,7 @@ function switchAthlete(direction) {
 function updateLiveView() {
   const athlete = getActiveAthleteTiming();
   if (!athlete || !state.session) return;
+  maybeFlashActiveAthleteChange(athlete.athleteName);
   const index = state.session.participants.indexOf(athlete.athleteName) + 1;
   elements.liveAthleteName.textContent = athlete.athleteName;
   elements.liveAthleteIndex.textContent = `${index} of ${state.session.participants.length}`;
@@ -837,21 +887,40 @@ function updateLiveView() {
 
   const lapCount = athlete.lapTimestamps.length;
   elements.lapCounter.textContent = `Lap ${lapCount} / ${athlete.totalLaps}`;
+  updateCurrentLapTimer(athlete);
   const lastSplit = athlete.lapSplitsMs.at(-1);
   elements.lastSplit.textContent = lastSplit ? `Last split: ${formatDuration(lastSplit)}` : "Last split: —";
 
   const finishReady = isFinishReady(athlete.totalLaps, lapCount);
   const showFinish = shouldShowFinish(athlete.totalLaps, lapCount);
-  const firstName = getFirstName(athlete.athleteName);
-  const truncated = truncateName(firstName, 12);
-  elements.lapButton.textContent = `Lap ${truncated}`;
-  elements.finishButton.textContent = `Finish ${truncated}`;
+  const requiredLapPresses = getRequiredLapPresses(athlete.totalLaps);
+  const nextLapNumber = Math.min(lapCount + 1, Math.max(1, requiredLapPresses));
+  const athleteCode = getAthleteCode(athlete.athleteName);
+  elements.lapButton.textContent = `Lap ${nextLapNumber} / ${requiredLapPresses} (${athleteCode})`;
+  elements.finishButton.textContent = `Finish ${athleteCode}`;
+  const accent = LIVE_ATHLETE_ACCENTS[(index - 1) % LIVE_ATHLETE_ACCENTS.length];
+  elements.lapButton.style.setProperty("--lap-accent", accent.primary);
+  elements.lapButton.style.setProperty("--lap-accent-dark", accent.dark);
   elements.finishButton.hidden = !showFinish;
   elements.lapButton.hidden = showFinish;
   elements.finishButton.disabled = !finishReady || athlete.finishTime !== null;
   elements.lapButton.disabled = athlete.finishTime !== null;
 
   renderLiveSplits(athlete.lapSplitsMs);
+}
+
+/**
+ * @param {AthleteTiming} athlete
+ * @param {number} [now]
+ */
+function updateCurrentLapTimer(athlete, now = Date.now()) {
+  if (athlete.startTime === null || athlete.finishTime !== null) {
+    elements.currentLapTimer.textContent = "Current lap: —";
+    return;
+  }
+  const lapStart = athlete.lapTimestamps.at(-1) ?? athlete.startTime;
+  const elapsed = Math.max(0, now - lapStart);
+  elements.currentLapTimer.textContent = `Current lap: ${formatDuration(elapsed)}`;
 }
 
 /**
@@ -874,6 +943,7 @@ function showScreen(name) {
   if (name !== "live") {
     stopLiveTimer();
     releaseWakeLock();
+    hideLiveSwitchFlash();
   }
 
   if (name === "history") {
@@ -890,6 +960,8 @@ function resetSession() {
   state.session = null;
   state.resultsDraft = [];
   state.resultsSaved = true;
+  lastLiveAthleteName = null;
+  hideLiveSwitchFlash();
   elements.resultsList.innerHTML = "";
 }
 
@@ -1046,10 +1118,7 @@ function renderLiveSplits(splits) {
  * @returns {boolean}
  */
 function shouldShowFinish(totalLaps, lapCount) {
-  if (Number.isInteger(totalLaps)) {
-    return lapCount >= Math.max(0, totalLaps - 1);
-  }
-  return lapCount >= Math.floor(totalLaps);
+  return lapCount >= getRequiredLapPresses(totalLaps);
 }
 
 /**
@@ -1062,22 +1131,54 @@ function isFinishReady(totalLaps, lapCount) {
 }
 
 /**
- * @param {string} name
- * @param {number} maxChars
- * @returns {string}
+ * @param {number} totalLaps
+ * @returns {number}
  */
-function truncateName(name, maxChars) {
-  if (name.length <= maxChars) return name;
-  return `${name.slice(0, maxChars)}...`;
+function getRequiredLapPresses(totalLaps) {
+  if (Number.isInteger(totalLaps)) {
+    return Math.max(0, totalLaps - 1);
+  }
+  return Math.max(0, Math.floor(totalLaps));
 }
 
 /**
  * @param {string} name
  * @returns {string}
  */
-function getFirstName(name) {
-  const parts = name.trim().split(/\s+/);
-  return parts[0] || name;
+function getAthleteCode(name) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "--";
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
+/**
+ * @param {string} athleteName
+ */
+function maybeFlashActiveAthleteChange(athleteName) {
+  const hasChanged = lastLiveAthleteName !== null && lastLiveAthleteName !== athleteName;
+  lastLiveAthleteName = athleteName;
+  if (!hasChanged) return;
+  elements.liveSwitchFlash.textContent = `Now timing: ${getAthleteCode(athleteName)}`;
+  elements.liveSwitchFlash.classList.add("visible");
+  if (liveSwitchFlashTimeout !== null) {
+    clearTimeout(liveSwitchFlashTimeout);
+  }
+  liveSwitchFlashTimeout = window.setTimeout(() => {
+    elements.liveSwitchFlash.classList.remove("visible");
+    liveSwitchFlashTimeout = null;
+  }, 2000);
+}
+
+function hideLiveSwitchFlash() {
+  elements.liveSwitchFlash.classList.remove("visible");
+  elements.liveSwitchFlash.textContent = "";
+  if (liveSwitchFlashTimeout !== null) {
+    clearTimeout(liveSwitchFlashTimeout);
+    liveSwitchFlashTimeout = null;
+  }
 }
 
 /**
