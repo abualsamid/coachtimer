@@ -5,7 +5,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "devl": "python3 -m http.server 5173",
+    "dev": "live-server --port=5173 --host=127.0.0.1 --no-browser --watch=index.html,styles.css,app.js,src,sw.js",
     "wrangler:login": "wrangler login",
     "prewrangler:publish": "test -z \"$(git status --porcelain)\"",
     "wrangler:publish": "wrangler pages deploy . --project-name coachtimer",
@@ -20,6 +20,7 @@
     "eslint": "^9.17.0",
     "globals": "^15.14.0",
     "happy-dom": "^20.3.3",
+    "live-server": "^1.2.2",
     "typescript": "^5.7.3",
     "vitest": "^4.0.17"
   },

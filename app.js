@@ -153,6 +153,7 @@ const elements = {
   startModeSelect: /** @type {HTMLSelectElement} */ (getRequiredElement("#start-mode-select")),
   totalLapsInput: /** @type {HTMLInputElement} */ (getRequiredElement("#total-laps-input")),
   athleteInput: /** @type {HTMLInputElement} */ (getRequiredElement("#athlete-input")),
+  athleteSuggestions: /** @type {HTMLDataListElement} */ (getRequiredElement("#athlete-suggestions")),
   addAthlete: /** @type {HTMLButtonElement} */ (getRequiredElement("#add-athlete")),
   athleteList: /** @type {HTMLElement} */ (getRequiredElement("#athlete-list")),
   startSetup: /** @type {HTMLButtonElement} */ (getRequiredElement("#start-setup")),
@@ -188,6 +189,7 @@ const elements = {
   historyAthleteFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-athlete-filter")),
   historySportFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-sport-filter")),
   historyEventFilter: /** @type {HTMLSelectElement} */ (getRequiredElement("#history-event-filter")),
+  historySummary: /** @type {HTMLElement} */ (getRequiredElement("#history-summary")),
   historyList: /** @type {HTMLElement} */ (getRequiredElement("#history-list")),
   exportHistory: /** @type {HTMLButtonElement} */ (getRequiredElement("#export-history"))
 };
@@ -271,12 +273,15 @@ function bindEvents() {
   elements.addAthlete.addEventListener("click", () => {
     const name = normalizeName(elements.athleteInput.value);
     if (!name) return;
-    if (!state.athletes.includes(name)) {
-      state.athletes.push(name);
-      state.setup.selectedAthletes = Array.from(new Set([...state.setup.selectedAthletes, name]));
+    const savedName = findExistingAthleteName(name) ?? name;
+    if (!state.athletes.includes(savedName)) {
+      state.athletes.push(savedName);
       persistAthletes();
-      persistSetup();
     }
+    if (!state.setup.selectedAthletes.includes(savedName)) {
+      state.setup.selectedAthletes = [...state.setup.selectedAthletes, savedName];
+    }
+    persistSetup();
     elements.athleteInput.value = "";
     renderAthleteList();
     updateStartButton();
@@ -435,6 +440,7 @@ function updateSetupSelections() {
 }
 
 function renderAthleteList() {
+  renderAthleteSuggestions();
   elements.athleteList.innerHTML = "";
   if (state.athletes.length === 0) {
     elements.athleteList.innerHTML = "<p class=\"muted\">Add athletes to begin.</p>";
@@ -478,6 +484,16 @@ function renderAthleteList() {
     wrapper.appendChild(actions);
     elements.athleteList.appendChild(wrapper);
   });
+}
+
+function renderAthleteSuggestions() {
+  const athleteNames = Array.from(new Set([
+    ...state.athletes,
+    ...state.history.map((item) => item.athleteName)
+  ])).sort((left, right) => left.localeCompare(right));
+  elements.athleteSuggestions.innerHTML = athleteNames
+    .map((name) => `<option value="${name}"></option>`)
+    .join("");
 }
 
 function updateStartButton() {
@@ -764,7 +780,7 @@ function renderResults() {
 }
 
 function saveResults() {
-  if (state.resultsDraft.length === 0) return;
+  if (state.resultsDraft.length === 0 || state.resultsSaved) return;
   state.history = [...state.resultsDraft, ...state.history];
   state.resultsSaved = true;
   persistHistory();
@@ -773,6 +789,7 @@ function saveResults() {
 }
 
 function renderHistoryFilters() {
+  renderAthleteSuggestions();
   const currentAthlete = elements.historyAthleteFilter.value;
   const currentSport = elements.historySportFilter.value;
   const currentEvent = elements.historyEventFilter.value;
@@ -803,6 +820,7 @@ function renderHistoryList() {
     return true;
   });
 
+  renderHistorySummary(filtered, athleteFilter);
   elements.historyList.innerHTML = "";
   if (filtered.length === 0) {
     elements.historyList.innerHTML = "<p class=\"muted\">No saved results yet.</p>";
@@ -862,6 +880,165 @@ function renderHistoryList() {
 }
 
 /**
+ * @param {ResultRecord[]} filtered
+ * @param {string} athleteFilter
+ */
+function renderHistorySummary(filtered, athleteFilter) {
+  elements.historySummary.innerHTML = "";
+  if (state.history.length === 0) return;
+
+  if (!athleteFilter) {
+    const prompt = document.createElement("div");
+    prompt.className = "card history-empty-summary";
+    prompt.innerHTML = "<p class=\"muted\">Choose an athlete in History to see progress over time.</p>";
+    elements.historySummary.appendChild(prompt);
+    return;
+  }
+
+  if (filtered.length === 0) {
+    const prompt = document.createElement("div");
+    prompt.className = "card history-empty-summary";
+    const message = document.createElement("p");
+    message.className = "muted";
+    message.textContent = `No saved races match the current filters for ${athleteFilter}.`;
+    prompt.appendChild(message);
+    elements.historySummary.appendChild(prompt);
+    return;
+  }
+
+  const overview = document.createElement("div");
+  overview.className = "card history-overview";
+
+  const title = document.createElement("h3");
+  title.textContent = `${athleteFilter} Progress`;
+  const subtitle = document.createElement("p");
+  subtitle.className = "muted";
+  const validTotals = filtered.filter((item) => item.totalTimeMs !== null);
+  const latestRace = [...filtered].sort(compareResultsByDateDesc)[0];
+  subtitle.textContent = `${filtered.length} saved race${filtered.length === 1 ? "" : "s"}${latestRace ? ` · Last raced ${new Date(latestRace.dateISO).toLocaleString()}` : ""}`;
+  overview.appendChild(title);
+  overview.appendChild(subtitle);
+
+  const overviewStats = document.createElement("div");
+  overviewStats.className = "history-stats";
+  overviewStats.appendChild(buildHistoryStat("Best total", formatBestTime(validTotals)));
+  overviewStats.appendChild(buildHistoryStat("Latest total", formatLatestTime(latestRace)));
+  overview.appendChild(overviewStats);
+  elements.historySummary.appendChild(overview);
+
+  const groups = Array.from(groupHistoryByRaceType(filtered).entries())
+    .map(([key, results]) => ({ key, results }))
+    .sort((left, right) => compareResultsByDateDesc(left.results[0], right.results[0]));
+
+  groups.forEach(({ results }) => {
+    const card = document.createElement("div");
+    card.className = "card history-group-card";
+    const latest = results[0];
+    const previous = results[1] ?? null;
+    const comparableTotals = results.filter((item) => item.totalTimeMs !== null);
+    const best = comparableTotals.reduce((fastest, item) => {
+      if (!fastest || (fastest.totalTimeMs !== null && item.totalTimeMs !== null && item.totalTimeMs < fastest.totalTimeMs)) {
+        return item;
+      }
+      return fastest;
+    }, /** @type {ResultRecord | null} */ (null));
+
+    const heading = document.createElement("h3");
+    heading.textContent = `${latest.sport} · ${latest.distance}`;
+    const detail = document.createElement("p");
+    detail.className = "muted";
+    detail.textContent = `${results.length} saved race${results.length === 1 ? "" : "s"}`;
+    card.appendChild(heading);
+    card.appendChild(detail);
+
+    const stats = document.createElement("div");
+    stats.className = "history-stats";
+    stats.appendChild(buildHistoryStat("Latest total", formatLatestTime(latest)));
+    stats.appendChild(buildHistoryStat("Best total", best && best.totalTimeMs !== null ? formatDuration(best.totalTimeMs) : "—"));
+    stats.appendChild(buildHistoryStat("Change vs previous", formatRaceDelta(latest, previous)));
+    card.appendChild(stats);
+    elements.historySummary.appendChild(card);
+  });
+}
+
+/**
+ * @param {string} label
+ * @param {string} value
+ * @returns {HTMLDivElement}
+ */
+function buildHistoryStat(label, value) {
+  const stat = document.createElement("div");
+  stat.className = "history-stat";
+  const statLabel = document.createElement("p");
+  statLabel.className = "eyebrow";
+  statLabel.textContent = label;
+  const statValue = document.createElement("p");
+  statValue.className = "history-stat-value";
+  statValue.textContent = value;
+  stat.appendChild(statLabel);
+  stat.appendChild(statValue);
+  return stat;
+}
+
+/**
+ * @param {ResultRecord[]} results
+ * @returns {Map<string, ResultRecord[]>}
+ */
+function groupHistoryByRaceType(results) {
+  const groups = new Map();
+  [...results]
+    .sort(compareResultsByDateDesc)
+    .forEach((result) => {
+      const key = `${result.sport}::${result.distance}`;
+      const group = groups.get(key) ?? [];
+      group.push(result);
+      groups.set(key, group);
+    });
+  return groups;
+}
+
+/**
+ * @param {ResultRecord[]} results
+ * @returns {string}
+ */
+function formatBestTime(results) {
+  if (results.length === 0) return "—";
+  const best = results.reduce((fastest, item) => (item.totalTimeMs !== null && item.totalTimeMs < fastest ? item.totalTimeMs : fastest), Number.POSITIVE_INFINITY);
+  return Number.isFinite(best) ? formatDuration(best) : "—";
+}
+
+/**
+ * @param {ResultRecord | null | undefined} result
+ * @returns {string}
+ */
+function formatLatestTime(result) {
+  if (!result || result.totalTimeMs === null) return "—";
+  return formatDuration(result.totalTimeMs);
+}
+
+/**
+ * @param {ResultRecord} latest
+ * @param {ResultRecord | null} previous
+ * @returns {string}
+ */
+function formatRaceDelta(latest, previous) {
+  if (!previous || latest.totalTimeMs === null || previous.totalTimeMs === null) return "—";
+  const delta = latest.totalTimeMs - previous.totalTimeMs;
+  if (delta === 0) return "No change";
+  const direction = delta < 0 ? "Faster" : "Slower";
+  return `${direction} by ${formatDuration(Math.abs(delta))}`;
+}
+
+/**
+ * @param {ResultRecord} left
+ * @param {ResultRecord} right
+ * @returns {number}
+ */
+function compareResultsByDateDesc(left, right) {
+  return Date.parse(right.dateISO) - Date.parse(left.dateISO);
+}
+
+/**
  * @param {number} direction
  */
 function switchAthlete(direction) {
@@ -886,18 +1063,20 @@ function updateLiveView() {
   elements.liveHeader.classList.toggle("single", !hasMultipleAthletes);
 
   const lapCount = athlete.lapTimestamps.length;
-  elements.lapCounter.textContent = `Lap ${lapCount} / ${athlete.totalLaps}`;
+  const displayedLapTotal = getDisplayedLapTotal(athlete.totalLaps);
+  const completedCrossings = lapCount + (athlete.finishTime !== null ? 1 : 0);
+  const remainingCrossings = Math.max(0, displayedLapTotal - completedCrossings);
+  elements.lapCounter.textContent = `Lap ${completedCrossings} / ${remainingCrossings}`;
   updateCurrentLapTimer(athlete);
   const lastSplit = athlete.lapSplitsMs.at(-1);
   elements.lastSplit.textContent = lastSplit ? `Last split: ${formatDuration(lastSplit)}` : "Last split: —";
 
   const finishReady = isFinishReady(athlete.totalLaps, lapCount);
   const showFinish = shouldShowFinish(athlete.totalLaps, lapCount);
-  const requiredLapPresses = getRequiredLapPresses(athlete.totalLaps);
-  const nextLapNumber = Math.min(lapCount + 1, Math.max(1, requiredLapPresses));
+  const nextLapNumber = Math.min(completedCrossings + 1, Math.max(1, displayedLapTotal));
   const athleteCode = getAthleteCode(athlete.athleteName);
-  elements.lapButton.textContent = `Lap ${nextLapNumber} / ${requiredLapPresses} (${athleteCode})`;
-  elements.finishButton.textContent = `Finish ${athleteCode}`;
+  elements.lapButton.textContent = `Lap ${nextLapNumber} / ${displayedLapTotal} (${athleteCode})`;
+  elements.finishButton.textContent = `Finish ${displayedLapTotal} / ${displayedLapTotal} (${athleteCode})`;
   const accent = LIVE_ATHLETE_ACCENTS[(index - 1) % LIVE_ATHLETE_ACCENTS.length];
   elements.lapButton.style.setProperty("--lap-accent", accent.primary);
   elements.lapButton.style.setProperty("--lap-accent-dark", accent.dark);
@@ -1035,6 +1214,15 @@ function loadJson(key, fallback) {
 }
 
 /**
+ * @param {string} name
+ * @returns {string | null}
+ */
+function findExistingAthleteName(name) {
+  const normalized = name.toLocaleLowerCase();
+  return state.athletes.find((athlete) => athlete.toLocaleLowerCase() === normalized) ?? null;
+}
+
+/**
  * @param {string} id
  * @returns {{ id: string, label: string, totalLaps: number }}
  */
@@ -1139,6 +1327,14 @@ function getRequiredLapPresses(totalLaps) {
     return Math.max(0, totalLaps - 1);
   }
   return Math.max(0, Math.floor(totalLaps));
+}
+
+/**
+ * @param {number} totalLaps
+ * @returns {number}
+ */
+function getDisplayedLapTotal(totalLaps) {
+  return Math.max(0, Math.ceil(totalLaps));
 }
 
 /**

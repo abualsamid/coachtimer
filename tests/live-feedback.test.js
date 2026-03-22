@@ -93,7 +93,8 @@ describe("live lap feedback", () => {
     const currentLapTimer = getElement("#current-lap-timer");
     const lapCounter = getElement("#lap-counter");
 
-    expect(lapButton.textContent).toBe("Lap 1 / 12 (AD)");
+    expect(lapButton.textContent).toBe("Lap 1 / 13 (AD)");
+    expect(lapCounter.textContent).toBe("Lap 0 / 13");
     expect(currentLapTimer.textContent).toBe("Current lap: 00:00.000");
 
     nowMs = 4750;
@@ -105,9 +106,36 @@ describe("live lap feedback", () => {
     nowMs = 5000;
     lapButton.click();
 
-    expect(lapButton.textContent).toBe("Lap 2 / 12 (AD)");
-    expect(lapCounter.textContent).toBe("Lap 1 / 12.5");
+    expect(lapButton.textContent).toBe("Lap 2 / 13 (AD)");
+    expect(lapCounter.textContent).toBe("Lap 1 / 12");
     expect(currentLapTimer.textContent).toBe("Current lap: 00:00.000");
+  });
+
+  it("treats a 12.5-lap race as 13 finish-line crossings in the live controls", () => {
+    getButton("#start-setup").click();
+    getButton("#start-controls button").click();
+
+    const lapButton = getButton("#lap-button");
+    const finishButton = getButton("#finish-button");
+    const lapCounter = getElement("#lap-counter");
+
+    for (let count = 0; count < 11; count += 1) {
+      nowMs += 2100;
+      lapButton.click();
+    }
+
+    expect(lapButton.textContent).toBe("Lap 12 / 13 (AD)");
+    expect(lapCounter.textContent).toBe("Lap 11 / 2");
+    expect(lapButton.hidden).toBe(false);
+    expect(finishButton.hidden).toBe(true);
+
+    nowMs += 2100;
+    lapButton.click();
+
+    expect(lapButton.hidden).toBe(true);
+    expect(finishButton.hidden).toBe(false);
+    expect(finishButton.textContent).toBe("Finish 13 / 13 (AD)");
+    expect(lapCounter.textContent).toBe("Lap 12 / 1");
   });
 
   it("shows lap button labels from 1 through 24 before finish in a 25-lap race", async () => {
@@ -130,7 +158,7 @@ describe("live lap feedback", () => {
 
     const lapButton = getButton("#lap-button");
     const finishButton = getButton("#finish-button");
-    expect(lapButton.textContent).toBe("Lap 1 / 24 (AD)");
+    expect(lapButton.textContent).toBe("Lap 1 / 25 (AD)");
     expect(lapButton.hidden).toBe(false);
     expect(finishButton.hidden).toBe(true);
 
@@ -139,7 +167,7 @@ describe("live lap feedback", () => {
       lapButton.click();
     }
 
-    expect(lapButton.textContent).toBe("Lap 24 / 24 (AD)");
+    expect(lapButton.textContent).toBe("Lap 24 / 25 (AD)");
     expect(lapButton.hidden).toBe(false);
     expect(finishButton.hidden).toBe(true);
 
@@ -147,5 +175,6 @@ describe("live lap feedback", () => {
     lapButton.click();
     expect(lapButton.hidden).toBe(true);
     expect(finishButton.hidden).toBe(false);
+    expect(finishButton.textContent).toBe("Finish 25 / 25 (AD)");
   });
 });

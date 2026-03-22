@@ -340,6 +340,7 @@ textarea:focus-visible {
 }
 
 .results-list,
+.history-summary,
 .history-list {
   display: grid;
   gap: 14px;
@@ -375,6 +376,36 @@ textarea:focus-visible {
   font-weight: 800;
 }
 
+.history-empty-summary {
+  padding: 12px 16px;
+}
+
+.history-overview {
+  gap: 10px;
+}
+
+.history-group-card {
+  gap: 10px;
+}
+
+.history-stats {
+  display: grid;
+  gap: 10px;
+}
+
+.history-stat {
+  background: #f2ede3;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.history-stat-value {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
 .stack {
   display: grid;
   gap: 12px;
@@ -395,5 +426,9 @@ textarea:focus-visible {
   main {
     max-width: 720px;
     margin: 0 auto;
+  }
+
+  .history-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

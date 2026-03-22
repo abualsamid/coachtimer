@@ -18,7 +18,7 @@ This repository is an offline-first, client-only JavaScript app served from a st
 - Start Control: mass or staggered starts.
 - Live Timing: single-athlete view with swipe navigation.
 - Results Summary: per-athlete splits and notes, save/export.
-- History: saved results with filters and CSV export.
+- History: saved results with filters, athlete progress summaries, and CSV export.
 
 ## Data Flow
 - User actions update in-memory state, then persist to Local Storage.

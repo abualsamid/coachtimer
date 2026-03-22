@@ -93,12 +93,12 @@ describe("staggered live auto-advance", () => {
     const lapButton = getButton("#lap-button");
     const switchFlash = getElement("#live-switch-flash");
     expect(activeAthleteName.textContent).toBe("Ada");
-    expect(lapButton.textContent).toBe("Lap 1 / 1 (AD)");
+    expect(lapButton.textContent).toBe("Lap 1 / 2 (AD)");
 
     nowMs = 5000;
     lapButton.click();
     expect(activeAthleteName.textContent).toBe("Grace");
-    expect(lapButton.textContent).toBe("Lap 1 / 1 (GR)");
+    expect(lapButton.textContent).toBe("Lap 1 / 2 (GR)");
     expect(switchFlash.textContent).toBe("Now timing: GR");
     expect(switchFlash.classList.contains("visible")).toBe(true);
     vi.advanceTimersByTime(2000);
@@ -107,7 +107,7 @@ describe("staggered live auto-advance", () => {
     nowMs = 8000;
     lapButton.click();
     expect(activeAthleteName.textContent).toBe("Ada");
-    expect(lapButton.textContent).toBe("Lap 1 / 1 (AD)");
+    expect(lapButton.textContent).toBe("Lap 2 / 2 (AD)");
     expect(switchFlash.textContent).toBe("Now timing: AD");
   });
 

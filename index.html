@@ -45,8 +45,10 @@
 
         <div class="card">
           <h3>Athletes</h3>
+          <p class="muted">Athletes stay saved on this device. Add them once, then just select them for future races.</p>
           <div class="inline">
-            <input id="athlete-input" type="text" placeholder="Add athlete name" autocomplete="off" />
+            <input id="athlete-input" type="text" placeholder="Add athlete name" autocomplete="off" list="athlete-suggestions" />
+            <datalist id="athlete-suggestions"></datalist>
             <button id="add-athlete" class="primary" type="button">Add</button>
           </div>
           <div id="athlete-list" class="athlete-list" aria-live="polite"></div>
@@ -142,6 +144,7 @@
           <button id="export-history" class="ghost" type="button">Export All CSV</button>
           <button id="back-to-setup-2" class="primary" type="button">Back to Setup</button>
         </div>
+        <div id="history-summary" class="history-summary"></div>
         <div id="history-list" class="history-list"></div>
       </section>
     </main>
