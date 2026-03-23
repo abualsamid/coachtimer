@@ -1150,7 +1150,8 @@ function resetSession() {
 function editAthlete(name) {
   const next = normalizeName(prompt(`Edit athlete name for ${name}:`, name) ?? "");
   if (!next || next === name) return;
-  if (state.athletes.includes(next)) {
+  const existingName = findExistingAthleteName(next);
+  if (existingName && existingName !== name) {
     alert("That name already exists.");
     return;
   }

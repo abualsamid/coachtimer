@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const appHtml = readFileSync("index.html", "utf8");
 const bodyMatch = appHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
@@ -45,6 +45,11 @@ describe("athlete roster", () => {
     await import("../app.js");
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("reuses a saved athlete when the new entry only differs by case", () => {
     const athleteInput = /** @type {HTMLInputElement} */ (getElement("#athlete-input"));
     const athleteList = getElement("#athlete-list");
@@ -60,5 +65,22 @@ describe("athlete roster", () => {
     expect(selectedAthletes).toEqual(["Asia"]);
     expect(checkboxes).toHaveLength(2);
     expect(athleteList.textContent).toContain("Asia");
+  });
+
+  it("blocks editing an athlete into another saved name that only differs by case", () => {
+    const promptSpy = vi.fn(() => "asia");
+    const alertSpy = vi.fn();
+    vi.stubGlobal("prompt", promptSpy);
+    vi.stubGlobal("alert", alertSpy);
+    const editButtons = /** @type {HTMLButtonElement[]} */ (
+      Array.from(document.querySelectorAll(".athlete-actions .ghost")).filter((button) => button.textContent === "Edit")
+    );
+
+    editButtons[1].click();
+
+    const savedAthletes = JSON.parse(localStorage.getItem("coachtimer:athletes") ?? "[]");
+    expect(promptSpy).toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith("That name already exists.");
+    expect(savedAthletes).toEqual(["Asia", "Bassel"]);
   });
 });

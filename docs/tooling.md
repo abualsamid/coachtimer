@@ -13,8 +13,8 @@
 - Use JSDoc annotations for stronger type guarantees.
 
 ## Local Development
-- `npm run dev` starts a local live-reload server on `http://127.0.0.1:5173`.
-- Changes to static files trigger a browser refresh; no manual reload is required.
+- `npm run dev` starts the Vite dev server on `http://127.0.0.1:5173`.
+- Changes to app files trigger live reload in the browser; no manual refresh is required.
 
 ## Required Workflow
 - Every code change must include or update tests.
